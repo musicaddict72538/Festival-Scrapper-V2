@@ -1,0 +1,54 @@
+name: Festival Scraper
+
+on:
+  workflow_dispatch:        # Allow manual run from GitHub UI
+  schedule:
+    - cron: "0 6 * * 1"     # Optional: runs every Monday at 6 AM UTC
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 🧰 Install system dependencies (Chrome + Driver)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install -y ./google-chrome-stable_current_amd64.deb
+          CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3)
+          wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/$(echo $CHROME_VERSION | cut -d. -f1)/chromedriver_linux64.zip" || true
+          unzip -o /tmp/chromedriver.zip -d /usr/local/bin/ || true
+
+      - name: 📦 Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🚀 Run festival scraper
+        run: |
+          python scraper.py
+
+      - name: 📤 Upload CSV results
+        uses: actions/upload-artifact@v4
+        with:
+          name: festival-results
+          path: "*.csv"
+
+      - name: 💾 Commit and push CSV to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mv *.csv results.csv
+          git add results.csv
+          git commit -m "Auto-update festival data [$(date)]" || echo "No changes to commit"
+          git push
+
